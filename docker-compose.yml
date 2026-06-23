@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   db:
     image: postgres:17
@@ -8,16 +10,24 @@ services:
       POSTGRES_DB: employee_db
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
 
   app:
     build: .
-    container_name: employee-app-container
-    ports:
-      - "5000:5000"
+    container_name: employee-app
     depends_on:
       - db
+    environment:
+      DB_HOST: db
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_NAME: employee_db
+    ports:
+      - "5000:5000"
 
-volumes:
-  postgres_data:
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml

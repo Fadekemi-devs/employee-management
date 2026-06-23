@@ -1,9 +1,17 @@
-from flask import Flask, render_template, request, redirect
-from database import get_employees, add_employee, get_employee_by_id, update_employee, delete_employee
 from prometheus_flask_exporter import PrometheusMetrics
+from flask import Flask, render_template, request, redirect, Response
+from database import get_employees, add_employee, get_employee_by_id, update_employee, delete_employee
+from prometheus_client import Counter
 
 app = Flask(__name__)
+
 metrics = PrometheusMetrics(app)
+
+employee_created = Counter(
+    "employee_created_total",
+    "Total employees created"
+)
+
 
 
 @app.route("/")
@@ -11,8 +19,6 @@ def home():
 
 
     employees = get_employees()
-
-
 
     return render_template(
         "index.html",
@@ -27,7 +33,6 @@ def add():
     department = request.form["department"]
     position = request.form["position"]
     salary = request.form["salary"]
-
     add_employee(
         name,
         email,
@@ -35,6 +40,7 @@ def add():
         position,
         salary
     )
+    employee_created.inc()
     return redirect("/")
 @app.route("/edit/<int:employee_id>", methods=["GET", "POST"])
 def edit_employee(employee_id):
@@ -46,7 +52,7 @@ def edit_employee(employee_id):
         department = request.form["department"]
         position = request.form["position"]
         salary = request.form["salary"]
-
+        employee_updated.inc()
         update_employee(
             employee_id,
             name,
@@ -70,11 +76,24 @@ def edit_employee(employee_id):
 def delete(employee_id):
 
     delete_employee(employee_id)
-
+    employee_deleted.inc()
     return redirect("/")
+
+@app.route("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype="text/plain"
+    )
+
+    
+@app.route("/health")
+def health():
+    return {"status": "ok"}
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=True
+        debug=False
     )
