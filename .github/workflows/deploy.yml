@@ -1,0 +1,43 @@
+name: Azure DevOps Capstone
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Azure login (will work after subscription fix)
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Docker build + push
+      - name: Build and push Docker image
+        run: |
+          az acr login --name myflaskregistry123
+          docker build -t myflaskregistry123.azurecr.io/my-flask-app .
+          docker push myflaskregistry123.azurecr.io/my-flask-app
+
+      # Terraform
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          terraform plan
+
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform apply -auto-approve
