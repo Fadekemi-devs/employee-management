@@ -2,6 +2,9 @@ from prometheus_flask_exporter import PrometheusMetrics
 from flask import Flask, render_template, request, redirect, Response
 from database import get_employees, add_employee, get_employee_by_id, update_employee, delete_employee
 from prometheus_client import Counter
+from database import create_table
+
+create_table()
 
 app = Flask(__name__)
 

@@ -4,6 +4,24 @@ import psycopg
 
 def get_connection():
     return psycopg.connect(os.environ["DATABASE_URL"])
+def create_table():
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS employees (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100),
+        email VARCHAR(100),
+        department VARCHAR(100),
+        position VARCHAR(100),
+        salary INTEGER
+    )
+    """)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
 
 def get_employees():
     conn = get_connection()
