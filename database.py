@@ -1,15 +1,9 @@
+
+import os
 import psycopg
 
-
 def get_connection():
-    return psycopg.connect(
-        host="employee-postgres",
-        port="5432",
-        dbname="employee_db",
-        user="postgres",
-        password="password"
-    )
-
+    return psycopg.connect(os.environ["DATABASE_URL"])
 
 def get_employees():
     conn = get_connection()
