@@ -1,7 +1,7 @@
 
 import os
 import psycopg
-from werkzeug.security import generate_password_hash,
+from werkzeug.security import generate_password_hash
 def get_connection():
     return psycopg.connect(os.environ["DATABASE_URL"])
 
