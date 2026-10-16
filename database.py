@@ -4,14 +4,19 @@ from werkzeug.security import generate_password_hash
 
 def get_connection():
     db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        host = os.environ.get("DB_HOST", "localhost")
-        user = os.environ.get("DB_USER", "postgres")
-        password = os.environ.get("DB_PASSWORD", "password")
-        dbname = os.environ.get("DB_NAME", "employee_db")
-        port = os.environ.get("DB_PORT", "5432")
-        db_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-    return psycopg.connect(db_url)
+    if db_url:
+        try:
+            return psycopg.connect(db_url)
+        except psycopg.OperationalError as e:
+            print(f"DATABASE_URL connection failed: {e}. Attempting fallback connection...")
+
+    host = os.environ.get("DB_HOST", "localhost")
+    user = os.environ.get("DB_USER", "postgres")
+    password = os.environ.get("DB_PASSWORD", "password")
+    dbname = os.environ.get("DB_NAME", "employee_db")
+    port = os.environ.get("DB_PORT", "5432")
+    fallback_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+    return psycopg.connect(fallback_url)
 
 def create_table():
     try:
@@ -46,13 +51,17 @@ def create_table():
         print(f"Error creating database tables: {e}")
 
 def get_employees():
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM employees")
-    employees = cur.fetchall()
-    cur.close()
-    conn.close()
-    return employees
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM employees")
+        employees = cur.fetchall()
+        cur.close()
+        conn.close()
+        return employees
+    except Exception as e:
+        print(f"Error in get_employees: {e}")
+        return []
 
 def add_employee(name, email, department, position, salary, user_id):
     conn = get_connection()
@@ -66,16 +75,20 @@ def add_employee(name, email, department, position, salary, user_id):
     conn.close()
 
 def get_employee_by_id(employee_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT * FROM employees WHERE id = %s",
-        (employee_id,)
-    )
-    employee = cur.fetchone()
-    cur.close()
-    conn.close()
-    return employee
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM employees WHERE id = %s",
+            (employee_id,)
+        )
+        employee = cur.fetchone()
+        cur.close()
+        conn.close()
+        return employee
+    except Exception as e:
+        print(f"Error in get_employee_by_id: {e}")
+        return None
 
 def update_employee(employee_id, name, department, position, salary):
     conn = get_connection()
@@ -120,28 +133,40 @@ def register_user(username, email, password):
     conn.close()
 
 def get_user_by_username(username):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username = %s", (username,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
-    return user
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+        return user
+    except Exception as e:
+        print(f"Error in get_user_by_username: {e}")
+        return None
 
 def get_employee_by_user_id(user_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM employees WHERE user_id = %s", (user_id,))
-    employee = cur.fetchone()
-    cur.close()
-    conn.close()
-    return employee
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM employees WHERE user_id = %s", (user_id,))
+        employee = cur.fetchone()
+        cur.close()
+        conn.close()
+        return employee
+    except Exception as e:
+        print(f"Error in get_employee_by_user_id: {e}")
+        return None
 
 def get_user_by_id(user_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
-    return user
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
+        return user
+    except Exception as e:
+        print(f"Error in get_user_by_id: {e}")
+        return None

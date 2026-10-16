@@ -1,5 +1,6 @@
 import os
 import pytest
+import psycopg
 from unittest.mock import patch, MagicMock
 from app import app, User
 import database
@@ -38,6 +39,15 @@ def test_get_connection_url():
         with patch("database.psycopg.connect") as mock_connect:
             database.get_connection()
             mock_connect.assert_called_once_with(test_url)
+
+def test_get_connection_operational_error_fallback():
+    test_url = "postgresql://user:pass@invalid-host:5432/mydb"
+    with patch.dict(os.environ, {"DATABASE_URL": test_url}):
+        with patch("database.psycopg.connect") as mock_connect:
+            mock_connect.side_effect = [psycopg.OperationalError("connection failed"), MagicMock()]
+            conn = database.get_connection()
+            assert mock_connect.call_count == 2
+            mock_connect.assert_called_with("postgresql://postgres:password@localhost:5432/employee_db")
 
 @patch("app.get_user_by_username")
 @patch("app.register_user")
