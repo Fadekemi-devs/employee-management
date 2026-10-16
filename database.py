@@ -8,15 +8,33 @@ def get_connection():
         try:
             return psycopg.connect(db_url)
         except psycopg.OperationalError as e:
-            print(f"DATABASE_URL connection failed: {e}. Attempting fallback connection...")
+            print(f"DATABASE_URL connection failed: {e}. Attempting fallback options...")
 
-    host = os.environ.get("DB_HOST", "localhost")
     user = os.environ.get("DB_USER", "postgres")
     password = os.environ.get("DB_PASSWORD", "password")
     dbname = os.environ.get("DB_NAME", "employee_db")
     port = os.environ.get("DB_PORT", "5432")
-    fallback_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-    return psycopg.connect(fallback_url)
+
+    configured_host = os.environ.get("DB_HOST", "localhost")
+
+    hosts = [configured_host]
+    if "dpg-db7k5i2vcj2c73dv1a3g-a" not in hosts:
+        hosts.append("dpg-db7k5i2vcj2c73dv1a3g-a")
+    if "localhost" not in hosts:
+        hosts.append("localhost")
+
+    last_exception = None
+    for host in hosts:
+        try:
+            url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+            return psycopg.connect(url)
+        except psycopg.OperationalError as e:
+            last_exception = e
+            print(f"Connection to host '{host}' failed: {e}")
+
+    if last_exception:
+        raise last_exception
+    raise psycopg.OperationalError("Unable to connect to any database server")
 
 def create_table():
     try:
@@ -64,15 +82,20 @@ def get_employees():
         return []
 
 def add_employee(name, email, department, position, salary, user_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO employees (name, email, department, position, salary, user_id)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """, (name, email, department, position, salary, user_id))
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO employees (name, email, department, position, salary, user_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (name, email, department, position, salary, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error in add_employee: {e}")
+        return False
 
 def get_employee_by_id(employee_id):
     try:
@@ -91,46 +114,61 @@ def get_employee_by_id(employee_id):
         return None
 
 def update_employee(employee_id, name, department, position, salary):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        UPDATE employees
-        SET
-            name=%s,
-            department=%s,
-            position=%s,
-            salary=%s
-        WHERE id=%s
-        """,
-        (name, department, position, salary, employee_id)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE employees
+            SET
+                name=%s,
+                department=%s,
+                position=%s,
+                salary=%s
+            WHERE id=%s
+            """,
+            (name, department, position, salary, employee_id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error in update_employee: {e}")
+        return False
 
 def delete_employee(employee_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "DELETE FROM employees WHERE id = %s",
-        (employee_id,)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM employees WHERE id = %s",
+            (employee_id,)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error in delete_employee: {e}")
+        return False
 
 def register_user(username, email, password):
-    password_hash = generate_password_hash(password)
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)",
-        (username, email, password_hash)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        password_hash = generate_password_hash(password)
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)",
+            (username, email, password_hash)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error in register_user: {e}")
+        return False
 
 def get_user_by_username(username):
     try:
