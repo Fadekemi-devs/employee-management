@@ -1,40 +1,67 @@
 import os
+import sqlite3
 import psycopg
 from werkzeug.security import generate_password_hash
+
+class DBCursor:
+    def __init__(self, mode, cursor):
+        self.mode = mode
+        self.cursor = cursor
+
+    def execute(self, sql, params=()):
+        if self.mode == 'sqlite':
+            sql = sql.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+            sql = sql.replace("%s", "?")
+        self.cursor.execute(sql, params)
+
+    def fetchone(self):
+        return self.cursor.fetchone()
+
+    def fetchall(self):
+        return self.cursor.fetchall()
+
+    def close(self):
+        self.cursor.close()
+
+class DBConnection:
+    def __init__(self, mode, conn):
+        self.mode = mode
+        self.conn = conn
+
+    def cursor(self):
+        return DBCursor(self.mode, self.conn.cursor())
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
 
 def get_connection():
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
         try:
-            return psycopg.connect(db_url)
-        except psycopg.OperationalError as e:
-            print(f"DATABASE_URL connection failed: {e}. Attempting fallback options...")
+            pg_conn = psycopg.connect(db_url)
+            return DBConnection('pg', pg_conn)
+        except Exception as e:
+            print(f"DATABASE_URL PostgreSQL connection failed: {e}")
 
-    user = os.environ.get("DB_USER", "postgres")
-    password = os.environ.get("DB_PASSWORD", "password")
-    dbname = os.environ.get("DB_NAME", "employee_db")
-    port = os.environ.get("DB_PORT", "5432")
-
-    configured_host = os.environ.get("DB_HOST", "localhost")
-
-    hosts = [configured_host]
-    if "dpg-db7k5i2vcj2c73dv1a3g-a" not in hosts:
-        hosts.append("dpg-db7k5i2vcj2c73dv1a3g-a")
-    if "localhost" not in hosts:
-        hosts.append("localhost")
-
-    last_exception = None
-    for host in hosts:
+    host = os.environ.get("DB_HOST")
+    if host and host != "db":
+        user = os.environ.get("DB_USER", "postgres")
+        password = os.environ.get("DB_PASSWORD", "password")
+        dbname = os.environ.get("DB_NAME", "employee_db")
+        port = os.environ.get("DB_PORT", "5432")
         try:
             url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-            return psycopg.connect(url)
-        except psycopg.OperationalError as e:
-            last_exception = e
-            print(f"Connection to host '{host}' failed: {e}")
+            pg_conn = psycopg.connect(url)
+            return DBConnection('pg', pg_conn)
+        except Exception as e:
+            print(f"PostgreSQL connection to host {host} failed: {e}")
 
-    if last_exception:
-        raise last_exception
-    raise psycopg.OperationalError("Unable to connect to any database server")
+    db_path = os.environ.get("SQLITE_DB_PATH", "/tmp/employee.db")
+    sq_conn = sqlite3.connect(db_path)
+    return DBConnection('sqlite', sq_conn)
 
 def create_table():
     try:

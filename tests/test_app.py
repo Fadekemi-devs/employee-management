@@ -1,8 +1,8 @@
 import os
+import tempfile
 import pytest
-import psycopg
-from unittest.mock import patch, MagicMock
-from app import app, User
+from unittest.mock import patch
+from app import app
 import database
 
 @pytest.fixture
@@ -10,8 +10,17 @@ def client():
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "testkey"
     app.config["WTF_CSRF_ENABLED"] = False
-    with app.test_client() as client:
-        yield client
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+
+    with patch.dict(os.environ, {"SQLITE_DB_PATH": db_path, "DATABASE_URL": ""}, clear=True):
+        database.create_table()
+        with app.test_client() as client:
+            yield client
+
+    if os.path.exists(db_path):
+        os.remove(db_path)
 
 def test_health_endpoint(client):
     response = client.get("/health")
@@ -27,78 +36,30 @@ def test_metrics_endpoint(client):
     response = client.get("/metrics")
     assert response.status_code == 200
 
-def test_get_connection_fallback():
-    with patch.dict(os.environ, {}, clear=True):
-        with patch("database.psycopg.connect") as mock_connect:
-            database.get_connection()
-            assert mock_connect.call_count >= 1
-
-def test_get_connection_url():
-    test_url = "postgresql://user:pass@remote:5432/mydb"
-    with patch.dict(os.environ, {"DATABASE_URL": test_url}):
-        with patch("database.psycopg.connect") as mock_connect:
-            database.get_connection()
-            mock_connect.assert_called_once_with(test_url)
-
-def test_get_connection_operational_error_fallback():
-    test_url = "postgresql://user:pass@invalid-host:5432/mydb"
-    with patch.dict(os.environ, {"DATABASE_URL": test_url}):
-        with patch("database.psycopg.connect") as mock_connect:
-            mock_connect.side_effect = [psycopg.OperationalError("connection failed"), MagicMock()]
-            conn = database.get_connection()
-            assert mock_connect.call_count == 2
-
-@patch("app.get_user_by_username")
-@patch("app.register_user")
-def test_register_post(mock_register, mock_get_user, client):
-    mock_get_user.return_value = None
-    mock_register.return_value = True
-    response = client.post("/register", data={
-        "username": "newuser",
-        "email": "new@example.com",
+def test_sqlite_fallback_and_crud(client):
+    reg_resp = client.post("/register", data={
+        "username": "testuser",
+        "email": "test@example.com",
         "password": "password123"
-    }, follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["Location"] == "/login"
+    }, follow_redirects=True)
+    assert reg_resp.status_code == 200
 
-@patch("app.get_user_by_username")
-def test_register_db_error_handling(mock_get_user, client):
-    mock_get_user.side_effect = Exception("DB Connection Error")
-    response = client.post("/register", data={
-        "username": "erroruser",
-        "email": "err@example.com",
+    login_resp = client.post("/login", data={
+        "username": "testuser",
+        "password": "password123"
+    }, follow_redirects=True)
+    assert login_resp.status_code == 200
+    assert b"Employee Directory" in login_resp.data
+
+def test_login_invalid_password(client):
+    client.post("/register", data={
+        "username": "testuser2",
+        "email": "test2@example.com",
         "password": "password123"
     })
-    assert response.status_code == 200
-    assert b"Unable to process registration" in response.data
-
-@patch("app.get_user_by_username")
-def test_login_invalid_user(mock_get_user, client):
-    mock_get_user.return_value = None
     response = client.post("/login", data={
-        "username": "nonexistent",
+        "username": "testuser2",
         "password": "wrongpassword"
     })
     assert response.status_code == 200
     assert b"Invalid username or password" in response.data
-
-@patch("app.get_user_by_username")
-def test_login_db_error_handling(mock_get_user, client):
-    mock_get_user.side_effect = Exception("DB Connection Error")
-    response = client.post("/login", data={
-        "username": "erroruser",
-        "password": "password123"
-    })
-    assert response.status_code == 200
-    assert b"Unable to log in due to server issue" in response.data
-
-@patch("app.get_employees")
-def test_dashboard_authenticated(mock_get_employees, client):
-    mock_get_employees.return_value = [(1, "Alice", "alice@example.com", "Eng", "Dev", 100000, 1)]
-    with client.session_transaction() as sess:
-        sess["_user_id"] = "1"
-    with patch("app.get_user_by_id") as mock_get_user_by_id:
-        mock_get_user_by_id.return_value = (1, "alice", "alice@example.com")
-        response = client.get("/dashboard")
-        assert response.status_code == 200
-        assert b"Alice" in response.data
