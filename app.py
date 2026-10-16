@@ -1,8 +1,8 @@
 import os
 from prometheus_flask_exporter import PrometheusMetrics
-from flask import Flask, render_template, request, redirect, Response
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from prometheus_client import Counter, generate_latest
+from flask import Flask, render_template, request, redirect
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from prometheus_client import Counter
 from werkzeug.security import check_password_hash
 from database import (
     get_employees,
@@ -13,14 +13,17 @@ from database import (
     register_user,
     get_user_by_username,
     get_user_by_id,
-    get_employee_by_user_id
+    get_employee_by_user_id,
+    create_table
 )
-from database import create_table
-
-create_table()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "devkey")
+
+try:
+    create_table()
+except Exception as err:
+    print(f"Warning: Failed to create database tables on startup: {err}")
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -31,15 +34,11 @@ employee_created = Counter("employee_created_total", "Total employees created")
 employee_updated = Counter("employee_updated_total", "Total employees updated")
 employee_deleted = Counter("employee_deleted_total", "Total employees deleted")
 
-class User:
+class User(UserMixin):
     def __init__(self, id, username, email):
         self.id = id
         self.username = username
         self.email = email
-    def is_authenticated(self): return True
-    def is_active(self): return True
-    def is_anonymous(self): return False
-    def get_id(self): return str(self.id)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -50,6 +49,8 @@ def load_user(user_id):
 
 @app.route("/")
 def landing():
+    if current_user.is_authenticated:
+        return redirect("/dashboard")
     return render_template("landing.html")
 
 @app.route("/register", methods=["GET", "POST"])
@@ -120,10 +121,6 @@ def delete(employee_id):
         delete_employee(employee_id)
         employee_deleted.inc()
     return redirect("/profile")
-
-@app.route("/metrics")
-def metrics_endpoint():
-    return Response(generate_latest(), mimetype="text/plain")
 
 @app.route("/health")
 def health():

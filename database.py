@@ -1,51 +1,59 @@
-
 import os
 import psycopg
 from werkzeug.security import generate_password_hash
+
 def get_connection():
-    return psycopg.connect(os.environ["DATABASE_URL"])
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        host = os.environ.get("DB_HOST", "localhost")
+        user = os.environ.get("DB_USER", "postgres")
+        password = os.environ.get("DB_PASSWORD", "password")
+        dbname = os.environ.get("DB_NAME", "employee_db")
+        port = os.environ.get("DB_PORT", "5432")
+        db_url = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+    return psycopg.connect(db_url)
 
 def create_table():
-    conn = get_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) UNIQUE NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL
-        )
-    """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL
+            )
+        """)
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS employees (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(100),
-            email VARCHAR(100),
-            department VARCHAR(100),
-            position VARCHAR(100),
-            salary INTEGER,
-            user_id INTEGER REFERENCES users(id)
-        )
-    """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100),
+                email VARCHAR(100),
+                department VARCHAR(100),
+                position VARCHAR(100),
+                salary INTEGER,
+                user_id INTEGER REFERENCES users(id)
+            )
+        """)
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error creating database tables: {e}")
+
 def get_employees():
     conn = get_connection()
-
     cur = conn.cursor()
-
     cur.execute("SELECT * FROM employees")
-
     employees = cur.fetchall()
-
     cur.close()
     conn.close()
-
     return employees
+
 def add_employee(name, email, department, position, salary, user_id):
     conn = get_connection()
     cur = conn.cursor()
@@ -56,37 +64,22 @@ def add_employee(name, email, department, position, salary, user_id):
     conn.commit()
     cur.close()
     conn.close()
+
 def get_employee_by_id(employee_id):
-
     conn = get_connection()
-
     cur = conn.cursor()
-
     cur.execute(
         "SELECT * FROM employees WHERE id = %s",
         (employee_id,)
     )
-
     employee = cur.fetchone()
-
     cur.close()
     conn.close()
-
     return employee
 
-
-def update_employee(
-    employee_id,
-    name,
-    department,
-    position,
-    salary
-):
-
+def update_employee(employee_id, name, department, position, salary):
     conn = get_connection()
-
     cur = conn.cursor()
-
     cur.execute(
         """
         UPDATE employees
@@ -97,34 +90,23 @@ def update_employee(
             salary=%s
         WHERE id=%s
         """,
-        (
-            name,
-            department,
-            position,
-            salary,
-            employee_id
-        )
+        (name, department, position, salary, employee_id)
     )
-
     conn.commit()
-
     cur.close()
     conn.close()
+
 def delete_employee(employee_id):
-
     conn = get_connection()
-
     cur = conn.cursor()
-
     cur.execute(
         "DELETE FROM employees WHERE id = %s",
         (employee_id,)
     )
-
     conn.commit()
-
     cur.close()
     conn.close()
+
 def register_user(username, email, password):
     password_hash = generate_password_hash(password)
     conn = get_connection()
@@ -136,6 +118,7 @@ def register_user(username, email, password):
     conn.commit()
     cur.close()
     conn.close()
+
 def get_user_by_username(username):
     conn = get_connection()
     cur = conn.cursor()
@@ -144,6 +127,7 @@ def get_user_by_username(username):
     cur.close()
     conn.close()
     return user
+
 def get_employee_by_user_id(user_id):
     conn = get_connection()
     cur = conn.cursor()
@@ -152,6 +136,7 @@ def get_employee_by_user_id(user_id):
     cur.close()
     conn.close()
     return employee
+
 def get_user_by_id(user_id):
     conn = get_connection()
     cur = conn.cursor()
