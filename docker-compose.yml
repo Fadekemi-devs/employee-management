@@ -10,17 +10,21 @@ services:
       POSTGRES_DB: employee_db
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d employee_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   app:
     build: .
     container_name: employee-app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
-      DB_HOST: db
-      DB_USER: postgres
-      DB_PASSWORD: password
-      DB_NAME: employee_db
+      DATABASE_URL: postgresql://postgres:password@db:5432/employee_db
+      SECRET_KEY: local-dev-only
     ports:
       - "5000:5000"
 
